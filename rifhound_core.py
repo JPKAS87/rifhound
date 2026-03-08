@@ -9,14 +9,14 @@ import csv
 import io
 import requests
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Callable
 
 # =========================
 # CONFIG
 # =========================
 DAYS_BACK = 90
-TODAY = datetime.utcnow().date()
+TODAY = datetime.now(timezone.utc).date()
 CUTOFF_DATE = TODAY - timedelta(days=DAYS_BACK)
 
 WARNFIREHOSE_BASE = "https://warnfirehose.com/api"
@@ -147,7 +147,7 @@ def fetch_warn_notices(api_key: str) -> List[EventRecord]:
             try:
                 event_date = datetime.strptime(date_str[:10], "%Y-%m-%d")
             except (ValueError, TypeError):
-                event_date = datetime.utcnow()
+                event_date = datetime.now(timezone.utc)
 
             if not in_window(event_date):
                 continue
@@ -228,7 +228,7 @@ def fetch_sec_filings(api_key: str) -> List[EventRecord]:
             try:
                 event_date = datetime.strptime(date_str[:10], "%Y-%m-%d")
             except (ValueError, TypeError):
-                event_date = datetime.utcnow()
+                event_date = datetime.now(timezone.utc)
 
             if not in_window(event_date):
                 continue
@@ -339,7 +339,7 @@ def fetch_news_signals(tavily_key: str) -> List[EventRecord]:
                 try:
                     event_date = datetime.strptime(published[:10], "%Y-%m-%d")
                 except (ValueError, TypeError):
-                    event_date = datetime.utcnow()
+                    event_date = datetime.now(timezone.utc)
 
                 if not in_window(event_date):
                     continue
@@ -413,7 +413,7 @@ def parse_uploaded_csv(content: str) -> List[EventRecord]:
                 try:
                     event_date = datetime.strptime(date_str, "%m/%d/%Y")
                 except (ValueError, TypeError):
-                    event_date = datetime.utcnow()
+                    event_date = datetime.now(timezone.utc)
 
             if not in_window(event_date):
                 continue
