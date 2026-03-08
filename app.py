@@ -4,7 +4,8 @@
 
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+import json
+from datetime import datetime, timezone, timedelta
 from rifhound_core import run_pipeline
 
 # ─────────────────────────────────────────
@@ -18,150 +19,399 @@ st.set_page_config(
 )
 
 # ─────────────────────────────────────────
-# STYLES
+# PERSISTENT STORAGE HELPERS
 # ─────────────────────────────────────────
-st.markdown("""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap');
 
-html, body, [class*="css"] { font-family: 'Syne', sans-serif; }
+def load_saved_settings():
+    if "settings_loaded" not in st.session_state:
+        st.session_state.settings_loaded = True
+        st.session_state.warn_key = ""
+        st.session_state.tavily_key = ""
+        st.session_state.csv_content = None
+        st.session_state.csv_upload_date = None
+        st.session_state.csv_filename = None
+        try:
+            if hasattr(st, "secrets"):
+                st.session_state.warn_key = st.secrets.get("WARNFIREHOSE_KEY", "")
+                st.session_state.tavily_key = st.secrets.get("TAVILY_KEY", "")
+        except Exception:
+            pass
 
-/* Header */
-.rh-header {
-    background: #0d0d0d;
-    border: 1px solid #222;
-    border-left: 4px solid #e53e3e;
-    border-radius: 12px;
-    padding: 2rem 2.5rem;
-    margin-bottom: 1.5rem;
-}
-.rh-header h1 {
-    font-size: 2.6rem;
-    font-weight: 800;
-    color: #fff;
-    margin: 0;
-    letter-spacing: -1px;
-}
-.rh-header h1 em { color: #e53e3e; font-style: normal; }
-.rh-header p { color: #666; margin: 0.4rem 0 0; font-size: 0.95rem; }
+def save_keys(warn_key, tavily_key):
+    st.session_state.warn_key = warn_key
+    st.session_state.tavily_key = tavily_key
 
-/* Stat cards */
-.stat-row { display: flex; gap: 1rem; margin: 1rem 0; }
-.stat-card {
-    flex: 1;
-    background: #0d0d0d;
-    border: 1px solid #1e1e1e;
-    border-radius: 10px;
-    padding: 1.2rem;
-    text-align: center;
-}
-.stat-num {
-    font-size: 2rem;
-    font-weight: 800;
-    color: #e53e3e;
-    font-family: 'DM Mono', monospace;
-    line-height: 1;
-}
-.stat-label {
-    font-size: 0.72rem;
-    color: #555;
-    text-transform: uppercase;
-    letter-spacing: 1.2px;
-    margin-top: 0.3rem;
-}
+def save_csv(content, filename):
+    st.session_state.csv_content = content
+    st.session_state.csv_upload_date = datetime.now(timezone.utc).isoformat()
+    st.session_state.csv_filename = filename
 
-/* Source badges */
-.badge {
-    display: inline-block;
-    padding: 0.15rem 0.5rem;
-    border-radius: 4px;
-    font-size: 0.7rem;
-    font-weight: 700;
-    font-family: 'DM Mono', monospace;
-    letter-spacing: 0.5px;
-}
-.badge-WARN       { background:#2d1515; color:#f87171; border:1px solid #4a2020; }
-.badge-SEC_8K     { background:#1a1a2d; color:#818cf8; border:1px solid #2a2a4a; }
-.badge-LAYOFFS_FYI{ background:#1a2d1a; color:#4ade80; border:1px solid #2a4a2a; }
-.badge-NEWS       { background:#1a2030; color:#60a5fa; border:1px solid #2a3050; }
+def get_csv_age_days():
+    if not st.session_state.get("csv_upload_date"):
+        return -1
+    try:
+        uploaded = datetime.fromisoformat(st.session_state.csv_upload_date)
+        return (datetime.now(timezone.utc) - uploaded).days
+    except Exception:
+        return -1
 
-/* Boolean output */
-.bool-box {
-    background: #080808;
-    border: 1px solid #1e1e1e;
-    border-left: 3px solid #e53e3e;
-    border-radius: 8px;
-    padding: 1.2rem 1.5rem;
-    font-family: 'DM Mono', monospace;
-    font-size: 0.82rem;
-    color: #aaa;
-    white-space: pre-wrap;
-    word-break: break-all;
-    max-height: 280px;
-    overflow-y: auto;
-    line-height: 1.6;
-}
+def clear_csv():
+    st.session_state.csv_content = None
+    st.session_state.csv_upload_date = None
+    st.session_state.csv_filename = None
 
-/* Info / tip boxes */
-.tip-box {
-    background: #0d0d0d;
-    border: 1px solid #1e1e1e;
-    border-radius: 8px;
-    padding: 0.9rem 1.1rem;
-    font-size: 0.85rem;
-    color: #666;
-    margin-bottom: 0.8rem;
-    line-height: 1.5;
-}
-.tip-box strong { color: #aaa; }
-.tip-box a { color: #e53e3e; text-decoration: none; }
+# ─────────────────────────────────────────
+# STYLE FUNCTION
+# ─────────────────────────────────────────
 
-/* Section headers */
-.sec-head {
-    font-size: 0.75rem;
-    font-weight: 700;
-    color: #555;
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
-    border-bottom: 1px solid #1e1e1e;
-    padding-bottom: 0.4rem;
-    margin: 1.2rem 0 0.8rem;
-}
+def style_app():
+    """
+    Applies the RIFHound "Recruiter Tech" design system.
+    Dark mode primary palette:
+        brand_color  = #2EA043  (Hunting Green)
+        accent_color = #38BDF8  (Intelligence Blue)
+        sidebar_bg   = #161B22
+        main_bg      = #0E1117
+        text_main    = #E6EDF3
+    Typography: Inter (Google Fonts) for body, DM Mono for code/data.
+    """
+    brand_color  = "#2EA043"
+    accent_color = "#38BDF8"
+    sidebar_bg   = "#161B22"
+    main_bg      = "#0E1117"
+    text_main    = "#E6EDF3"
 
-/* Run button */
-div[data-testid="stButton"] > button {
-    background: #e53e3e !important;
-    color: white !important;
-    border: none !important;
-    border-radius: 8px !important;
-    font-weight: 700 !important;
-    font-family: 'Syne', sans-serif !important;
-    font-size: 1rem !important;
-    padding: 0.65rem 2rem !important;
-    letter-spacing: 0.3px !important;
-    transition: background 0.2s !important;
-    width: 100% !important;
-}
-div[data-testid="stButton"] > button:hover {
-    background: #c53030 !important;
-}
+    st.markdown(f"""
+    <style>
+    /* ── FONTS ── */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
 
-/* Sidebar */
-[data-testid="stSidebar"] { background: #080808 !important; }
-[data-testid="stSidebar"] .stMarkdown p { color: #666; font-size: 0.85rem; }
+    /* ── BASE ── */
+    html, body, [class*="css"] {{
+        font-family: 'Inter', sans-serif;
+        line-height: 1.6;
+        color: {text_main};
+        background-color: {main_bg};
+    }}
 
-/* Warning/error callouts */
-.warn-note {
-    background: #1a1200;
-    border: 1px solid #3a2a00;
-    border-radius: 6px;
-    padding: 0.6rem 0.9rem;
-    font-size: 0.82rem;
-    color: #b8860b;
-    margin-top: 0.5rem;
-}
-</style>
-""", unsafe_allow_html=True)
+    /* ── MAIN CANVAS ── */
+    .main .block-container {{
+        padding: 2rem 2.5rem 3rem;
+        max-width: 1200px;
+    }}
+
+    /* ── SIDEBAR ── */
+    [data-testid="stSidebar"] {{
+        background: {sidebar_bg} !important;
+        border-right: 1px solid #30363D !important;
+    }}
+    [data-testid="stSidebar"] .stMarkdown p,
+    [data-testid="stSidebar"] label {{
+        color: #8B949E !important;
+        font-size: 0.85rem !important;
+        line-height: 1.6 !important;
+    }}
+    [data-testid="stSidebar"] h3 {{
+        color: {text_main} !important;
+        font-size: 0.78rem !important;
+        font-weight: 700 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 1.4px !important;
+        margin-bottom: 0.6rem !important;
+    }}
+
+    /* ── EXPANDER (API Keys section) ── */
+    [data-testid="stExpander"] {{
+        background: #161B22 !important;
+        border: 1px solid #30363D !important;
+        border-radius: 8px !important;
+        margin-bottom: 0.6rem !important;
+    }}
+    [data-testid="stExpander"] summary {{
+        font-weight: 600 !important;
+        font-size: 0.85rem !important;
+        color: {text_main} !important;
+        padding: 0.7rem 1rem !important;
+    }}
+    [data-testid="stExpander"] summary:hover {{
+        color: {accent_color} !important;
+    }}
+
+    /* ── HEADER ── */
+    .rh-header {{
+        background: linear-gradient(135deg, #0D1117 0%, #161B22 100%);
+        border: 1px solid #30363D;
+        border-left: 4px solid {brand_color};
+        border-radius: 12px;
+        padding: 2rem 2.5rem;
+        margin-bottom: 1.8rem;
+    }}
+    .rh-header h1 {{
+        font-size: 2.4rem;
+        font-weight: 800;
+        color: {text_main};
+        margin: 0;
+        letter-spacing: -1px;
+        line-height: 1.2;
+    }}
+    .rh-header h1 em {{
+        color: {brand_color};
+        font-style: normal;
+    }}
+    .rh-header p {{
+        color: #8B949E;
+        margin: 0.5rem 0 0;
+        font-size: 0.95rem;
+        line-height: 1.6;
+    }}
+
+    /* ── RUN BUTTON ── */
+    div[data-testid="stButton"] > button {{
+        background: {brand_color} !important;
+        color: #ffffff !important;
+        border: none !important;
+        border-radius: 8px !important;
+        font-weight: 700 !important;
+        font-family: 'Inter', sans-serif !important;
+        font-size: 1rem !important;
+        letter-spacing: 0.3px !important;
+        padding: 0.7rem 2rem !important;
+        width: 100% !important;
+        transition: background 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease !important;
+        box-shadow: 0 2px 8px rgba(46, 160, 67, 0.25) !important;
+    }}
+    div[data-testid="stButton"] > button:hover {{
+        background: #3FB950 !important;
+        box-shadow: 0 4px 16px rgba(46, 160, 67, 0.4) !important;
+        transform: translateY(-1px) !important;
+    }}
+    div[data-testid="stButton"] > button:active {{
+        transform: translateY(0px) !important;
+        background: #238636 !important;
+    }}
+
+    /* ── STAT CARDS ── */
+    .stat-card {{
+        background: #161B22;
+        border: 1px solid #30363D;
+        border-radius: 10px;
+        padding: 1.2rem;
+        text-align: center;
+        transition: border-color 0.2s;
+    }}
+    .stat-card:hover {{ border-color: {brand_color}; }}
+    .stat-num {{
+        font-size: 1.9rem;
+        font-weight: 800;
+        color: {brand_color};
+        font-family: 'DM Mono', monospace;
+        line-height: 1;
+    }}
+    .stat-label {{
+        font-size: 0.7rem;
+        color: #8B949E;
+        text-transform: uppercase;
+        letter-spacing: 1.3px;
+        margin-top: 0.35rem;
+        font-weight: 500;
+    }}
+
+    /* ── SOURCE STATUS PILLS ── */
+    .pill {{
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0.2rem 0.65rem;
+        border-radius: 999px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        font-family: 'DM Mono', monospace;
+        letter-spacing: 0.3px;
+        margin: 0.15rem 0.1rem;
+    }}
+    .pill-green  {{ background: #0D3320; color: #3FB950; border: 1px solid #238636; }}
+    .pill-yellow {{ background: #2D1F00; color: #E3B341; border: 1px solid #9E6A03; }}
+    .pill-red    {{ background: #2D0E0E; color: #F85149; border: 1px solid #8E1519; }}
+    .pill-gray   {{ background: #1C2128; color: #8B949E; border: 1px solid #30363D; }}
+    .pill-blue   {{ background: #0C2135; color: {accent_color}; border: 1px solid #1158A7; }}
+
+    /* ── SECTION HEADERS ── */
+    .sec-head {{
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: #8B949E;
+        text-transform: uppercase;
+        letter-spacing: 1.6px;
+        border-bottom: 1px solid #21262D;
+        padding-bottom: 0.45rem;
+        margin: 1.4rem 0 0.9rem;
+    }}
+
+    /* ── TIP / INFO BOXES ── */
+    .tip-box {{
+        background: #161B22;
+        border: 1px solid #30363D;
+        border-radius: 8px;
+        padding: 0.9rem 1.1rem;
+        font-size: 0.85rem;
+        color: #8B949E;
+        margin-bottom: 0.8rem;
+        line-height: 1.6;
+    }}
+    .tip-box strong {{ color: {text_main}; }}
+    .tip-box a {{ color: {accent_color}; text-decoration: none; }}
+    .tip-box a:hover {{ text-decoration: underline; }}
+
+    /* ── CSV STATUS ── */
+    .csv-status {{
+        background: #161B22;
+        border: 1px solid #30363D;
+        border-radius: 8px;
+        padding: 0.8rem 1rem;
+        font-size: 0.83rem;
+        color: #8B949E;
+        margin-bottom: 0.6rem;
+        line-height: 1.6;
+    }}
+    .csv-status strong {{ color: {text_main}; }}
+
+    /* ── ALERT BOXES ── */
+    .reminder-box {{
+        background: #2D1F00;
+        border: 1px solid #9E6A03;
+        border-left: 3px solid #E3B341;
+        border-radius: 8px;
+        padding: 1rem 1.2rem;
+        font-size: 0.88rem;
+        color: #E3B341;
+        margin-bottom: 1rem;
+        line-height: 1.6;
+    }}
+    .reminder-box strong {{ color: #F0C040; }}
+    .reminder-box a {{ color: #E3B341; }}
+
+    .urgent-box {{
+        background: #2D0E0E;
+        border: 1px solid #8E1519;
+        border-left: 3px solid #F85149;
+        border-radius: 8px;
+        padding: 1rem 1.2rem;
+        font-size: 0.88rem;
+        color: #F85149;
+        margin-bottom: 1rem;
+        line-height: 1.6;
+    }}
+    .urgent-box strong {{ color: #FF7B72; }}
+    .urgent-box a {{ color: #F85149; }}
+
+    /* ── BOOLEAN STRING BOX ── */
+    .bool-box {{
+        background: #0D1117;
+        border: 1px solid #30363D;
+        border-left: 3px solid {brand_color};
+        border-radius: 8px;
+        padding: 1.2rem 1.5rem;
+        font-family: 'DM Mono', monospace;
+        font-size: 0.82rem;
+        color: #8B949E;
+        white-space: pre-wrap;
+        word-break: break-all;
+        max-height: 280px;
+        overflow-y: auto;
+        line-height: 1.7;
+    }}
+
+    /* ── DATAFRAME — sticky headers + zebra stripes ── */
+    [data-testid="stDataFrame"] table {{
+        border-collapse: collapse !important;
+        width: 100% !important;
+    }}
+    [data-testid="stDataFrame"] thead th {{
+        position: sticky !important;
+        top: 0 !important;
+        background: #161B22 !important;
+        color: {accent_color} !important;
+        font-size: 0.75rem !important;
+        font-weight: 700 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.8px !important;
+        padding: 0.65rem 0.9rem !important;
+        border-bottom: 2px solid #30363D !important;
+        z-index: 1 !important;
+    }}
+    [data-testid="stDataFrame"] tbody tr:nth-child(odd) td {{
+        background: #0D1117 !important;
+    }}
+    [data-testid="stDataFrame"] tbody tr:nth-child(even) td {{
+        background: #161B22 !important;
+    }}
+    [data-testid="stDataFrame"] tbody tr:hover td {{
+        background: #1C2A1C !important;
+    }}
+    [data-testid="stDataFrame"] tbody td {{
+        color: {text_main} !important;
+        font-size: 0.85rem !important;
+        padding: 0.55rem 0.9rem !important;
+        border-bottom: 1px solid #21262D !important;
+        line-height: 1.6 !important;
+    }}
+
+    /* ── INPUT FIELDS ── */
+    [data-testid="stTextInput"] input {{
+        background: #0D1117 !important;
+        border: 1px solid #30363D !important;
+        border-radius: 6px !important;
+        color: {text_main} !important;
+        font-family: 'DM Mono', monospace !important;
+        font-size: 0.85rem !important;
+    }}
+    [data-testid="stTextInput"] input:focus {{
+        border-color: {brand_color} !important;
+        box-shadow: 0 0 0 2px rgba(46,160,67,0.2) !important;
+    }}
+
+    /* ── TOGGLE ── */
+    [data-testid="stToggle"] span[data-checked="true"] {{
+        background: {brand_color} !important;
+    }}
+
+    /* ── SUCCESS / WARNING / INFO ALERTS ── */
+    [data-testid="stAlert"] {{
+        border-radius: 8px !important;
+        font-size: 0.88rem !important;
+        line-height: 1.6 !important;
+    }}
+
+    /* ── DOWNLOAD BUTTONS ── */
+    [data-testid="stDownloadButton"] button {{
+        background: #161B22 !important;
+        color: {text_main} !important;
+        border: 1px solid #30363D !important;
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+        font-size: 0.88rem !important;
+        transition: border-color 0.2s, background 0.2s !important;
+    }}
+    [data-testid="stDownloadButton"] button:hover {{
+        border-color: {brand_color} !important;
+        background: #1C2A1C !important;
+        color: {brand_color} !important;
+    }}
+
+    /* ── SCROLLBAR ── */
+    ::-webkit-scrollbar {{ width: 6px; height: 6px; }}
+    ::-webkit-scrollbar-track {{ background: #0D1117; }}
+    ::-webkit-scrollbar-thumb {{ background: #30363D; border-radius: 3px; }}
+    ::-webkit-scrollbar-thumb:hover {{ background: {brand_color}; }}
+
+    </style>
+    """, unsafe_allow_html=True)
+
+# ─────────────────────────────────────────
+# INIT
+# ─────────────────────────────────────────
+load_saved_settings()
+style_app()
 
 # ─────────────────────────────────────────
 # HEADER
@@ -174,99 +424,132 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────
-# SIDEBAR — API KEYS + SETTINGS
+# 90-DAY CSV REMINDER BANNER
+# ─────────────────────────────────────────
+csv_age = get_csv_age_days()
+
+if csv_age >= 90:
+    st.markdown(f"""
+    <div class="urgent-box">
+    <strong>⚠️ Your Layoffs.FYI data is {csv_age} days old and is now stale.</strong><br>
+    Go to <a href="https://layoffs.fyi" target="_blank">layoffs.fyi</a>,
+    download a fresh CSV, and upload it in the sidebar to keep your results current.
+    </div>
+    """, unsafe_allow_html=True)
+elif csv_age >= 75:
+    st.markdown(f"""
+    <div class="reminder-box">
+    <strong>📅 Heads up — your Layoffs.FYI CSV is {csv_age} days old.</strong><br>
+    It covers a 90-day window, so it'll expire in about {90 - csv_age} days.
+    Download a fresh one soon from <a href="https://layoffs.fyi" target="_blank">layoffs.fyi</a>.
+    </div>
+    """, unsafe_allow_html=True)
+
+# ─────────────────────────────────────────
+# SIDEBAR
 # ─────────────────────────────────────────
 with st.sidebar:
     st.markdown("### 🔑 API Keys")
-
     st.markdown("""
     <div class="tip-box">
+    Enter once — saved for your session automatically.<br><br>
     <strong>WARNFirehose</strong> — Free key at
-    <a href="https://warnfirehose.com/account" target="_blank">warnfirehose.com/account</a><br>
-    Powers WARN notices + SEC 8-K filings.
+    <a href="https://warnfirehose.com/account" target="_blank">warnfirehose.com/account</a><br><br>
+    <strong>Tavily</strong> — Free key at
+    <a href="https://app.tavily.com" target="_blank">app.tavily.com</a>
     </div>
     """, unsafe_allow_html=True)
 
-    warn_key = st.text_input(
+    warn_key_input = st.text_input(
         "WARNFirehose API Key",
+        value=st.session_state.warn_key,
         type="password",
         placeholder="wfh_xxxxxxxxxxxxxxxx",
-        help="Get a free key at warnfirehose.com/account (50 calls/day free)"
     )
-
-    st.markdown("""
-    <div class="tip-box" style="margin-top:0.6rem">
-    <strong>Tavily</strong> — Free key at
-    <a href="https://app.tavily.com" target="_blank">app.tavily.com</a><br>
-    Powers the news &amp; M&amp;A scanner.
-    </div>
-    """, unsafe_allow_html=True)
-
-    tavily_key = st.text_input(
+    tavily_key_input = st.text_input(
         "Tavily API Key",
+        value=st.session_state.tavily_key,
         type="password",
         placeholder="tvly-xxxxxxxxxxxxxxxx",
-        help="Get a free key at app.tavily.com"
     )
+
+    if warn_key_input != st.session_state.warn_key or tavily_key_input != st.session_state.tavily_key:
+        save_keys(warn_key_input, tavily_key_input)
+        if warn_key_input or tavily_key_input:
+            st.success("✅ Keys saved for this session")
 
     st.markdown("---")
     st.markdown("### ⚙️ Data Sources")
-
-    include_warn = st.toggle("🔴 WARN Act Notices", value=True,
-        help="All 50 states via WARNFirehose. Most reliable layoff signal — 60-day advance notice required by law.")
-    include_sec = st.toggle("🟣 SEC 8-K Filings", value=True,
-        help="Item 2.05 = confirmed restructuring/workforce reduction filed with SEC.")
-    include_news = st.toggle("🔵 News & M&A Scanner", value=True,
-        help="Uses Tavily to scan for layoff, M&A, and restructuring news signals.")
+    include_warn = st.toggle("🔴 WARN Act Notices", value=True)
+    include_sec  = st.toggle("🟣 SEC 8-K Filings",  value=True)
+    include_news = st.toggle("🔵 News & M&A Scanner", value=True)
 
     st.markdown("---")
-    st.markdown("### 📁 Layoffs.FYI Upload")
-    st.markdown("""
-    <div class="tip-box">
-    <strong>Optional but recommended.</strong><br>
-    Go to <a href="https://layoffs.fyi" target="_blank">layoffs.fyi</a>, 
-    enter your email, and download the free CSV (last 90 days, up to 500 rows). 
-    Upload it here to combine with API data.
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown("### 📁 Layoffs.FYI CSV")
 
-    uploaded_file = st.file_uploader(
-        "Upload Layoffs.FYI CSV",
-        type=["csv"],
-        label_visibility="collapsed"
+    if st.session_state.csv_content:
+        age = get_csv_age_days()
+        age_color = "#f87171" if age >= 90 else "#f59e0b" if age >= 75 else "#4ade80"
+        age_note  = "⚠️ Refresh now" if age >= 90 else "⚠️ Refresh soon" if age >= 75 else "✓ Fresh"
+        st.markdown(f"""
+        <div class="csv-status">
+        <strong>✅ {st.session_state.csv_filename or 'layoffs.csv'}</strong><br>
+        <span style="color:{age_color}">Uploaded {age} day{'s' if age != 1 else ''} ago — {age_note}</span>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("🗑️ Clear saved CSV"):
+            clear_csv()
+            st.rerun()
+    else:
+        st.markdown("""
+        <div class="tip-box">
+        Go to <a href="https://layoffs.fyi" target="_blank">layoffs.fyi</a>,
+        enter your email, download the free CSV.<br><br>
+        <strong>Upload once — RIFHound saves it automatically.</strong>
+        You'll get a reminder at 75 days and again at 90 days to refresh it.
+        </div>
+        """, unsafe_allow_html=True)
+
+    uploaded_file = st.file_uploader("Upload Layoffs.FYI CSV", type=["csv"], label_visibility="collapsed")
+    if uploaded_file is not None:
+        content = uploaded_file.read().decode("utf-8", errors="replace")
+        save_csv(content, uploaded_file.name)
+        st.success(f"✅ Saved: {uploaded_file.name}")
+
+    st.markdown("---")
+    st.markdown("### 📡 Source Status")
+
+    def _pill(label, ready, extra=""):
+        cls = "pill-green" if ready else "pill-gray"
+        dot = "●" if ready else "○"
+        return f'<span class="pill {cls}">{dot} {label}{extra}</span>'
+
+    warn_ready   = bool(st.session_state.warn_key)
+    tavily_ready = bool(st.session_state.tavily_key)
+    csv_ready    = bool(st.session_state.csv_content)
+    csv_extra    = f" ({csv_age}d)" if csv_ready else ""
+
+    st.markdown(
+        _pill("WARN Notices", warn_ready) + " " +
+        _pill("SEC 8-K", warn_ready) + "<br>" +
+        _pill("News Scanner", tavily_ready) + " " +
+        _pill("Layoffs.FYI", csv_ready, csv_extra),
+        unsafe_allow_html=True
     )
 
-    st.markdown("---")
-
-    # Key status indicators
-    st.markdown("### 📡 Source Status")
-    warn_status = "✅ Connected" if warn_key else "⚠️ Key needed"
-    tavily_status = "✅ Connected" if tavily_key else "⚠️ Key needed"
-    csv_status = "✅ Uploaded" if uploaded_file else "—  Not uploaded"
-
-    st.markdown(f"""
-    <div class="tip-box">
-    🔴 WARN notices: <strong>{warn_status}</strong><br>
-    🟣 SEC 8-K filings: <strong>{warn_status}</strong><br>
-    🔵 News scanner: <strong>{tavily_status}</strong><br>
-    📁 Layoffs.FYI: <strong>{csv_status}</strong>
-    </div>
-    """, unsafe_allow_html=True)
-
 # ─────────────────────────────────────────
-# VALIDATION + RUN BUTTON
+# RUN BUTTON
 # ─────────────────────────────────────────
 has_any_source = (
-    (warn_key and (include_warn or include_sec)) or
-    (tavily_key and include_news) or
-    uploaded_file is not None
+    (st.session_state.warn_key and (include_warn or include_sec)) or
+    (st.session_state.tavily_key and include_news) or
+    st.session_state.csv_content is not None
 )
 
 if not has_any_source:
     st.markdown("""
-    <div class="warn-note">
-    ⚠️ Add at least one API key or upload a CSV to get started. 
-    Both WARNFirehose and Tavily offer free tiers — see sidebar for links.
+    <div class="tip-box" style="border-left:3px solid #e53e3e;color:#888">
+    ⚠️ Add at least one API key or upload a CSV to get started.
     </div>
     """, unsafe_allow_html=True)
 
@@ -279,181 +562,108 @@ with col_m:
 # ─────────────────────────────────────────
 if run_btn:
     progress = st.progress(0)
-    status = st.empty()
+    status_el = st.empty()
 
-    def on_progress(msg: str, pct: int):
+    def on_progress(msg, pct):
         progress.progress(pct / 100)
-        status.markdown(f"**{msg}**")
-
-    uploaded_content = None
-    if uploaded_file:
-        uploaded_content = uploaded_file.read().decode("utf-8", errors="replace")
+        status_el.markdown(f"**{msg}**")
 
     try:
         results = run_pipeline(
-            warnfirehose_key=warn_key or "",
-            tavily_key=tavily_key or "",
-            uploaded_csv=uploaded_content,
+            warnfirehose_key=st.session_state.warn_key or "",
+            tavily_key=st.session_state.tavily_key or "",
+            uploaded_csv=st.session_state.csv_content,
             include_warn=include_warn,
             include_sec=include_sec,
             include_news=include_news,
             progress_callback=on_progress,
         )
-
         progress.empty()
-        status.empty()
+        status_el.empty()
 
-        # Surface any skipped-source warnings
-        if results["errors"]:
-            for err in results["errors"]:
-                st.warning(f"⚠️ {err}")
+        for err in results["errors"]:
+            st.warning(f"⚠️ {err}")
 
-        total = results["total"]
+        total   = results["total"]
         records = results["records"]
-        sc = results["source_counts"]
+        sc      = results["source_counts"]
 
         if total == 0:
-            st.info("No results found. Try adding more API keys or uploading a Layoffs.FYI CSV.")
+            st.info("No results found. Try adding API keys or uploading a Layoffs.FYI CSV.")
         else:
             st.success(f"✅ RIFHound found **{total} companies** with active talent availability signals.")
 
-            # ── STATS ──
             st.markdown('<div class="sec-head">Results Breakdown</div>', unsafe_allow_html=True)
             c1, c2, c3, c4, c5 = st.columns(5)
             for col, label, key in [
-                (c1, "Total", None),
-                (c2, "WARN Notices", "WARN"),
-                (c3, "SEC 8-K", "SEC_8K"),
-                (c4, "Layoffs.FYI", "LAYOFFS_FYI"),
+                (c1, "Total", None), (c2, "WARN Notices", "WARN"),
+                (c3, "SEC 8-K", "SEC_8K"), (c4, "Layoffs.FYI", "LAYOFFS_FYI"),
                 (c5, "News Signals", "NEWS"),
             ]:
                 count = total if key is None else sc.get(key, 0)
                 with col:
-                    st.markdown(f"""
-                    <div class="stat-card">
-                        <div class="stat-num">{count}</div>
-                        <div class="stat-label">{label}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    st.markdown(f'<div class="stat-card"><div class="stat-num">{count}</div><div class="stat-label">{label}</div></div>', unsafe_allow_html=True)
 
-            # ── TABLE ──
             st.markdown('<div class="sec-head">Talent Availability Report</div>', unsafe_allow_html=True)
-
-            rows = []
-            for r in records:
-                rows.append({
-                    "Date": r.date.strftime("%Y-%m-%d"),
-                    "Company": r.company,
-                    "Location": r.location or "—",
-                    "Target Group": r.target_group or "Review",
-                    "Headcount": r.headcount or "—",
-                    "Pitch Angle": r.pitch_angle,
-                    "Source": r.source,
-                    "Reason": r.reason,
-                })
+            rows = [{"Date": r.date.strftime("%Y-%m-%d"), "Company": r.company,
+                     "Location": r.location or "—", "Target Group": r.target_group or "Review",
+                     "Headcount": r.headcount or "—", "Pitch Angle": r.pitch_angle,
+                     "Source": r.source, "Reason": r.reason} for r in records]
             df = pd.DataFrame(rows)
 
-            # Filters
             f1, f2 = st.columns(2)
             with f1:
-                grp_filter = st.multiselect(
-                    "Filter by Target Group",
-                    options=sorted(df["Target Group"].unique()),
-                    placeholder="All groups"
-                )
+                grp_filter = st.multiselect("Filter by Target Group", options=sorted(df["Target Group"].unique()), placeholder="All groups")
             with f2:
-                src_filter = st.multiselect(
-                    "Filter by Source",
-                    options=sorted(df["Source"].unique()),
-                    placeholder="All sources"
-                )
+                src_filter = st.multiselect("Filter by Source", options=sorted(df["Source"].unique()), placeholder="All sources")
 
             filtered = df.copy()
-            if grp_filter:
-                filtered = filtered[filtered["Target Group"].isin(grp_filter)]
-            if src_filter:
-                filtered = filtered[filtered["Source"].isin(src_filter)]
+            if grp_filter: filtered = filtered[filtered["Target Group"].isin(grp_filter)]
+            if src_filter:  filtered = filtered[filtered["Source"].isin(src_filter)]
 
             st.dataframe(filtered, use_container_width=True, hide_index=True, height=420)
             st.caption(f"Showing {len(filtered)} of {total} companies")
 
-            # ── DOWNLOADS ──
             st.markdown('<div class="sec-head">Export</div>', unsafe_allow_html=True)
             d1, d2 = st.columns(2)
             with d1:
-                st.download_button(
-                    "📥 Full Report (CSV)",
-                    data=results["csv_bytes"],
+                st.download_button("📥 Full Report (CSV)", data=results["csv_bytes"],
                     file_name=f"rifhound_{datetime.today().strftime('%Y%m%d')}.csv",
-                    mime="text/csv",
-                    use_container_width=True,
-                )
+                    mime="text/csv", use_container_width=True)
             with d2:
-                filtered_csv = filtered.to_csv(index=False).encode("utf-8")
-                st.download_button(
-                    "📥 Filtered View (CSV)",
-                    data=filtered_csv,
+                st.download_button("📥 Filtered View (CSV)",
+                    data=filtered.to_csv(index=False).encode("utf-8"),
                     file_name=f"rifhound_filtered_{datetime.today().strftime('%Y%m%d')}.csv",
-                    mime="text/csv",
-                    use_container_width=True,
-                )
+                    mime="text/csv", use_container_width=True)
 
-            # ── BOOLEAN STRING ──
             st.markdown('<div class="sec-head">LinkedIn Recruiter Boolean String</div>', unsafe_allow_html=True)
-            st.markdown("""
-            <div class="tip-box">
-            Paste into the <strong>Current Company</strong> filter in LinkedIn Recruiter. 
-            Set the filter to <strong>"Current"</strong> to target people still employed at these companies.
-            </div>
-            """, unsafe_allow_html=True)
-
-            bool_str = results["boolean_str"]
-            if bool_str:
-                st.markdown(f'<div class="bool-box">{bool_str}</div>', unsafe_allow_html=True)
-                st.download_button(
-                    "📋 Download Boolean String (.txt)",
-                    data=bool_str.encode("utf-8"),
+            st.markdown('<div class="tip-box">Paste into the <strong>Current Company</strong> filter in LinkedIn Recruiter. Set to <strong>"Current"</strong>.</div>', unsafe_allow_html=True)
+            if results["boolean_str"]:
+                st.markdown(f'<div class="bool-box">{results["boolean_str"]}</div>', unsafe_allow_html=True)
+                st.download_button("📋 Download Boolean String (.txt)",
+                    data=results["boolean_str"].encode("utf-8"),
                     file_name=f"rifhound_boolean_{datetime.today().strftime('%Y%m%d')}.txt",
-                    mime="text/plain",
-                )
-            else:
-                st.info("No companies found — unable to generate Boolean string.")
+                    mime="text/plain")
 
     except Exception as e:
         progress.empty()
-        status.empty()
+        status_el.empty()
         st.error(f"Something went wrong: {str(e)}")
-        st.info("Check that your API keys are correct and try again.")
+        st.info("Check your API keys are correct and try again.")
 
-# ─────────────────────────────────────────
-# EMPTY STATE
-# ─────────────────────────────────────────
 else:
     st.markdown('<div class="sec-head">How It Works</div>', unsafe_allow_html=True)
     c1, c2, c3, c4 = st.columns(4)
-    cards = [
-        ("🔴", "WARN Act Notices",
-         "Federal law requires 60-day advance notice before mass layoffs. RIFHound pulls all 50 states daily via WARNFirehose API."),
-        ("🟣", "SEC 8-K Filings",
-         "Item 2.05 filings = confirmed workforce restructuring. Publicly filed with the SEC — RIFHound surfaces them automatically."),
-        ("🔵", "M&A News Scanner",
-         "Tavily searches for recent layoff, merger, and restructuring news. Catches signals before WARN notices are even filed."),
-        ("📁", "Layoffs.FYI Upload",
-         "Download the free 90-day CSV from Layoffs.fyi and upload it here. RIFHound merges it with API data and deduplicates everything."),
-    ]
-    for col, (icon, title, desc) in zip([c1, c2, c3, c4], cards):
+    for col, icon, title, desc in zip([c1,c2,c3,c4],
+        ["🔴","🟣","🔵","📁"],
+        ["WARN Act Notices","SEC 8-K Filings","M&A News Scanner","Layoffs.FYI CSV"],
+        [
+            "Federal law requires 60-day advance notice before mass layoffs. RIFHound pulls all 50 states daily.",
+            "Item 2.05 = confirmed workforce restructuring filed with the SEC. Most reliable corporate signal.",
+            "Tavily searches for layoff, merger, and restructuring news — catches signals before WARN notices are filed.",
+            "Upload once, saved automatically. You'll get a reminder at 75 days and again at 90 days to refresh it.",
+        ]):
         with col:
-            st.markdown(f"""
-            <div class="stat-card" style="text-align:left; padding:1.4rem;">
-                <div style="font-size:1.6rem; margin-bottom:0.6rem;">{icon}</div>
-                <div style="font-weight:700; color:#ccc; margin-bottom:0.4rem; font-size:0.9rem;">{title}</div>
-                <div style="color:#555; font-size:0.8rem; line-height:1.5;">{desc}</div>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-card" style="text-align:left;padding:1.4rem"><div style="font-size:1.6rem;margin-bottom:0.6rem">{icon}</div><div style="font-weight:700;color:#ccc;margin-bottom:0.4rem;font-size:0.9rem">{title}</div><div style="color:#555;font-size:0.8rem;line-height:1.5">{desc}</div></div>', unsafe_allow_html=True)
 
-    st.markdown("""
-    <div class="tip-box" style="margin-top:1.5rem; text-align:center;">
-    <strong>Ready to start?</strong> Add your API keys in the sidebar, then click <strong>Run RIFHound</strong>.<br>
-    Both WARNFirehose and Tavily offer <strong>free tiers</strong> — no credit card required.
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown('<div class="tip-box" style="margin-top:1.5rem;text-align:center"><strong>Ready to start?</strong> Add your API keys in the sidebar — saved automatically. Both WARNFirehose and Tavily offer <strong>free tiers</strong>.</div>', unsafe_allow_html=True)
