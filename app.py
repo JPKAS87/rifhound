@@ -66,134 +66,115 @@ def clear_csv():
 
 def style_app():
     """
-    Applies the RIFHound "Recruiter Tech" design system.
-    Dark mode primary palette:
-        brand_color  = #2EA043  (Hunting Green)
-        accent_color = #38BDF8  (Intelligence Blue)
-        sidebar_bg   = #161B22
-        main_bg      = #0E1117
-        text_main    = #E6EDF3
-    Typography: Inter (Google Fonts) for body, DM Mono for code/data.
+    RIFHound design system — matched to brand logo palette.
+    Logo palette:
+        brand_color  = #A61C1C  (crimson red)
+        accent_color = #D94040  (lighter red for hover)
+        sidebar_bg   = #0D1B2A  (near-black with warm tint)
+        main_bg      = #111111  (dark canvas)
+        text_main    = #F0F0F0  (off-white)
+    Typography: Bebas Neue for headers, Barlow for body, DM Mono for data.
     """
-    brand_color  = "#2EA043"
-    accent_color = "#38BDF8"
-    sidebar_bg   = "#161B22"
-    main_bg      = "#0E1117"
-    text_main    = "#E6EDF3"
+    brand_color  = "#003F8A"
+    accent_color = "#1A6EC4"
+    sidebar_bg   = "#0D1B2A"
+    main_bg      = "#060D18"
+    text_main    = "#F0F0F0"
+    border_col   = "#1A2A3A"
 
     st.markdown(f"""
     <style>
-    /* ── FONTS ── */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
 
-    /* ── BASE ── */
     html, body, [class*="css"] {{
-        font-family: 'Inter', sans-serif;
+        font-family: 'Barlow', sans-serif;
         line-height: 1.6;
         color: {text_main};
         background-color: {main_bg};
     }}
-
-    /* ── MAIN CANVAS ── */
     .main .block-container {{
         padding: 2rem 2.5rem 3rem;
         max-width: 1200px;
     }}
 
-    /* ── SIDEBAR ── */
+    /* SIDEBAR */
     [data-testid="stSidebar"] {{
         background: {sidebar_bg} !important;
-        border-right: 1px solid #30363D !important;
+        border-right: 1px solid {border_col} !important;
     }}
     [data-testid="stSidebar"] .stMarkdown p,
     [data-testid="stSidebar"] label {{
-        color: #8B949E !important;
+        color: #888 !important;
         font-size: 0.85rem !important;
         line-height: 1.6 !important;
     }}
     [data-testid="stSidebar"] h3 {{
         color: {text_main} !important;
-        font-size: 0.78rem !important;
+        font-size: 0.72rem !important;
         font-weight: 700 !important;
         text-transform: uppercase !important;
-        letter-spacing: 1.4px !important;
+        letter-spacing: 2px !important;
         margin-bottom: 0.6rem !important;
     }}
 
-    /* ── EXPANDER (API Keys section) ── */
-    [data-testid="stExpander"] {{
-        background: #161B22 !important;
-        border: 1px solid #30363D !important;
-        border-radius: 8px !important;
-        margin-bottom: 0.6rem !important;
-    }}
-    [data-testid="stExpander"] summary {{
-        font-weight: 600 !important;
-        font-size: 0.85rem !important;
-        color: {text_main} !important;
-        padding: 0.7rem 1rem !important;
-    }}
-    [data-testid="stExpander"] summary:hover {{
-        color: {accent_color} !important;
-    }}
-
-    /* ── HEADER ── */
+    /* HEADER */
     .rh-header {{
-        background: linear-gradient(135deg, #0D1117 0%, #161B22 100%);
-        border: 1px solid #30363D;
+        background: linear-gradient(135deg, #080F1A 0%, #0D1B2A 100%);
+        border: 1px solid #0A1A2E;
         border-left: 4px solid {brand_color};
         border-radius: 12px;
-        padding: 2rem 2.5rem;
+        padding: 1.6rem 2rem;
         margin-bottom: 1.8rem;
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
     }}
-    .rh-header h1 {{
-        font-size: 2.4rem;
-        font-weight: 800;
+    .rh-logo {{ flex-shrink: 0; }}
+    .rh-header-text h1 {{
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 3rem;
+        font-weight: 400;
         color: {text_main};
         margin: 0;
-        letter-spacing: -1px;
-        line-height: 1.2;
+        letter-spacing: 2px;
+        line-height: 1;
     }}
-    .rh-header h1 em {{
-        color: {brand_color};
-        font-style: normal;
-    }}
-    .rh-header p {{
-        color: #8B949E;
-        margin: 0.5rem 0 0;
-        font-size: 0.95rem;
-        line-height: 1.6;
+    .rh-header-text h1 em {{ color: {brand_color}; font-style: normal; }}
+    .rh-header-text p {{
+        color: #888;
+        margin: 0.4rem 0 0;
+        font-size: 0.9rem;
+        line-height: 1.5;
     }}
 
-    /* ── RUN BUTTON ── */
+    /* RUN BUTTON */
     div[data-testid="stButton"] > button {{
         background: {brand_color} !important;
         color: #ffffff !important;
         border: none !important;
-        border-radius: 8px !important;
-        font-weight: 700 !important;
-        font-family: 'Inter', sans-serif !important;
-        font-size: 1rem !important;
-        letter-spacing: 0.3px !important;
-        padding: 0.7rem 2rem !important;
+        border-radius: 6px !important;
+        font-family: 'Bebas Neue', sans-serif !important;
+        font-size: 1.2rem !important;
+        letter-spacing: 2.5px !important;
+        padding: 0.65rem 2rem !important;
         width: 100% !important;
         transition: background 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease !important;
-        box-shadow: 0 2px 8px rgba(46, 160, 67, 0.25) !important;
+        box-shadow: 0 2px 10px rgba(0,63,138,0.35) !important;
     }}
     div[data-testid="stButton"] > button:hover {{
-        background: #3FB950 !important;
-        box-shadow: 0 4px 16px rgba(46, 160, 67, 0.4) !important;
+        background: {accent_color} !important;
+        box-shadow: 0 4px 18px rgba(0,63,138,0.5) !important;
         transform: translateY(-1px) !important;
     }}
     div[data-testid="stButton"] > button:active {{
         transform: translateY(0px) !important;
-        background: #238636 !important;
+        background: #002D6B !important;
     }}
 
-    /* ── STAT CARDS ── */
+    /* STAT CARDS */
     .stat-card {{
-        background: #161B22;
-        border: 1px solid #30363D;
+        background: #0D1B2A;
+        border: 1px solid {border_col};
         border-radius: 10px;
         padding: 1.2rem;
         text-align: center;
@@ -201,22 +182,22 @@ def style_app():
     }}
     .stat-card:hover {{ border-color: {brand_color}; }}
     .stat-num {{
-        font-size: 1.9rem;
-        font-weight: 800;
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 2.2rem;
         color: {brand_color};
-        font-family: 'DM Mono', monospace;
         line-height: 1;
+        letter-spacing: 1px;
     }}
     .stat-label {{
-        font-size: 0.7rem;
-        color: #8B949E;
+        font-size: 0.68rem;
+        color: #666;
         text-transform: uppercase;
-        letter-spacing: 1.3px;
+        letter-spacing: 1.5px;
         margin-top: 0.35rem;
-        font-weight: 500;
+        font-weight: 600;
     }}
 
-    /* ── SOURCE STATUS PILLS ── */
+    /* PILL BADGES */
     .pill {{
         display: inline-flex;
         align-items: center;
@@ -229,32 +210,31 @@ def style_app():
         letter-spacing: 0.3px;
         margin: 0.15rem 0.1rem;
     }}
-    .pill-green  {{ background: #0D3320; color: #3FB950; border: 1px solid #238636; }}
+    .pill-green  {{ background: #0D2A0D; color: #4ADE80; border: 1px solid #166534; }}
     .pill-yellow {{ background: #2D1F00; color: #E3B341; border: 1px solid #9E6A03; }}
-    .pill-red    {{ background: #2D0E0E; color: #F85149; border: 1px solid #8E1519; }}
-    .pill-gray   {{ background: #1C2128; color: #8B949E; border: 1px solid #30363D; }}
-    .pill-blue   {{ background: #0C2135; color: {accent_color}; border: 1px solid #1158A7; }}
+    .pill-red    {{ background: #0A1525; color: #F87171; border: 1px solid #003F8A; }}
+    .pill-gray   {{ background: #1C1C1C; color: #666;    border: 1px solid #2A2A2A; }}
 
-    /* ── SECTION HEADERS ── */
+    /* SECTION HEADERS */
     .sec-head {{
-        font-size: 0.72rem;
-        font-weight: 700;
-        color: #8B949E;
-        text-transform: uppercase;
-        letter-spacing: 1.6px;
-        border-bottom: 1px solid #21262D;
-        padding-bottom: 0.45rem;
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 0.95rem;
+        font-weight: 400;
+        color: #666;
+        letter-spacing: 3px;
+        border-bottom: 1px solid {border_col};
+        padding-bottom: 0.4rem;
         margin: 1.4rem 0 0.9rem;
     }}
 
-    /* ── TIP / INFO BOXES ── */
+    /* TIP BOXES */
     .tip-box {{
-        background: #161B22;
-        border: 1px solid #30363D;
+        background: #0D1B2A;
+        border: 1px solid {border_col};
         border-radius: 8px;
         padding: 0.9rem 1.1rem;
         font-size: 0.85rem;
-        color: #8B949E;
+        color: #888;
         margin-bottom: 0.8rem;
         line-height: 1.6;
     }}
@@ -262,20 +242,20 @@ def style_app():
     .tip-box a {{ color: {accent_color}; text-decoration: none; }}
     .tip-box a:hover {{ text-decoration: underline; }}
 
-    /* ── CSV STATUS ── */
+    /* CSV STATUS */
     .csv-status {{
-        background: #161B22;
-        border: 1px solid #30363D;
+        background: #0D1B2A;
+        border: 1px solid {border_col};
         border-radius: 8px;
         padding: 0.8rem 1rem;
         font-size: 0.83rem;
-        color: #8B949E;
+        color: #888;
         margin-bottom: 0.6rem;
         line-height: 1.6;
     }}
     .csv-status strong {{ color: {text_main}; }}
 
-    /* ── ALERT BOXES ── */
+    /* ALERT BOXES */
     .reminder-box {{
         background: #2D1F00;
         border: 1px solid #9E6A03;
@@ -291,29 +271,29 @@ def style_app():
     .reminder-box a {{ color: #E3B341; }}
 
     .urgent-box {{
-        background: #2D0E0E;
-        border: 1px solid #8E1519;
-        border-left: 3px solid #F85149;
+        background: #080F1A;
+        border: 1px solid #003F8A;
+        border-left: 3px solid {brand_color};
         border-radius: 8px;
         padding: 1rem 1.2rem;
         font-size: 0.88rem;
-        color: #F85149;
+        color: #F87171;
         margin-bottom: 1rem;
         line-height: 1.6;
     }}
-    .urgent-box strong {{ color: #FF7B72; }}
-    .urgent-box a {{ color: #F85149; }}
+    .urgent-box strong {{ color: #FCA5A5; }}
+    .urgent-box a {{ color: #F87171; }}
 
-    /* ── BOOLEAN STRING BOX ── */
+    /* BOOLEAN BOX */
     .bool-box {{
-        background: #0D1117;
-        border: 1px solid #30363D;
+        background: #060D18;
+        border: 1px solid {border_col};
         border-left: 3px solid {brand_color};
         border-radius: 8px;
         padding: 1.2rem 1.5rem;
         font-family: 'DM Mono', monospace;
         font-size: 0.82rem;
-        color: #8B949E;
+        color: #888;
         white-space: pre-wrap;
         word-break: break-all;
         max-height: 280px;
@@ -321,45 +301,36 @@ def style_app():
         line-height: 1.7;
     }}
 
-    /* ── DATAFRAME — sticky headers + zebra stripes ── */
-    [data-testid="stDataFrame"] table {{
-        border-collapse: collapse !important;
-        width: 100% !important;
-    }}
+    /* DATAFRAME — sticky headers + zebra stripes */
+    [data-testid="stDataFrame"] table {{ border-collapse: collapse !important; width: 100% !important; }}
     [data-testid="stDataFrame"] thead th {{
         position: sticky !important;
         top: 0 !important;
-        background: #161B22 !important;
+        background: #0D1B2A !important;
         color: {accent_color} !important;
-        font-size: 0.75rem !important;
+        font-size: 0.72rem !important;
         font-weight: 700 !important;
         text-transform: uppercase !important;
-        letter-spacing: 0.8px !important;
+        letter-spacing: 1px !important;
         padding: 0.65rem 0.9rem !important;
-        border-bottom: 2px solid #30363D !important;
+        border-bottom: 2px solid {brand_color} !important;
         z-index: 1 !important;
     }}
-    [data-testid="stDataFrame"] tbody tr:nth-child(odd) td {{
-        background: #0D1117 !important;
-    }}
-    [data-testid="stDataFrame"] tbody tr:nth-child(even) td {{
-        background: #161B22 !important;
-    }}
-    [data-testid="stDataFrame"] tbody tr:hover td {{
-        background: #1C2A1C !important;
-    }}
+    [data-testid="stDataFrame"] tbody tr:nth-child(odd) td  {{ background: #111111 !important; }}
+    [data-testid="stDataFrame"] tbody tr:nth-child(even) td {{ background: #080F1A !important; }}
+    [data-testid="stDataFrame"] tbody tr:hover td {{ background: #0A1A2E !important; }}
     [data-testid="stDataFrame"] tbody td {{
         color: {text_main} !important;
         font-size: 0.85rem !important;
         padding: 0.55rem 0.9rem !important;
-        border-bottom: 1px solid #21262D !important;
+        border-bottom: 1px solid {border_col} !important;
         line-height: 1.6 !important;
     }}
 
-    /* ── INPUT FIELDS ── */
+    /* INPUT FIELDS */
     [data-testid="stTextInput"] input {{
-        background: #0D1117 !important;
-        border: 1px solid #30363D !important;
+        background: #060D18 !important;
+        border: 1px solid {border_col} !important;
         border-radius: 6px !important;
         color: {text_main} !important;
         font-family: 'DM Mono', monospace !important;
@@ -367,41 +338,29 @@ def style_app():
     }}
     [data-testid="stTextInput"] input:focus {{
         border-color: {brand_color} !important;
-        box-shadow: 0 0 0 2px rgba(46,160,67,0.2) !important;
+        box-shadow: 0 0 0 2px rgba(0,63,138,0.2) !important;
     }}
 
-    /* ── TOGGLE ── */
-    [data-testid="stToggle"] span[data-checked="true"] {{
-        background: {brand_color} !important;
-    }}
-
-    /* ── SUCCESS / WARNING / INFO ALERTS ── */
-    [data-testid="stAlert"] {{
-        border-radius: 8px !important;
-        font-size: 0.88rem !important;
-        line-height: 1.6 !important;
-    }}
-
-    /* ── DOWNLOAD BUTTONS ── */
+    /* DOWNLOAD BUTTONS */
     [data-testid="stDownloadButton"] button {{
-        background: #161B22 !important;
+        background: #0D1B2A !important;
         color: {text_main} !important;
-        border: 1px solid #30363D !important;
-        border-radius: 8px !important;
+        border: 1px solid {border_col} !important;
+        border-radius: 6px !important;
         font-weight: 600 !important;
         font-size: 0.88rem !important;
         transition: border-color 0.2s, background 0.2s !important;
     }}
     [data-testid="stDownloadButton"] button:hover {{
         border-color: {brand_color} !important;
-        background: #1C2A1C !important;
-        color: {brand_color} !important;
+        background: #0A1A2E !important;
+        color: {accent_color} !important;
     }}
 
-    /* ── SCROLLBAR ── */
+    /* SCROLLBAR */
     ::-webkit-scrollbar {{ width: 6px; height: 6px; }}
-    ::-webkit-scrollbar-track {{ background: #0D1117; }}
-    ::-webkit-scrollbar-thumb {{ background: #30363D; border-radius: 3px; }}
+    ::-webkit-scrollbar-track {{ background: #060D18; }}
+    ::-webkit-scrollbar-thumb {{ background: #1A2A3A; border-radius: 3px; }}
     ::-webkit-scrollbar-thumb:hover {{ background: {brand_color}; }}
 
     </style>
@@ -418,8 +377,30 @@ style_app()
 # ─────────────────────────────────────────
 st.markdown("""
 <div class="rh-header">
-  <h1>🐾 RIF<em>Hound</em></h1>
-  <p>Recruiting Intelligence Engine — Surfaces layoffs, WARN notices &amp; M&amp;A signals into a recruiter-ready pipeline report.</p>
+  <div class="rh-logo">
+    <svg width="72" height="72" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- Geometric dog head body -->
+      <polygon points="20,95 40,30 80,20 105,55 95,95" fill="#003F8A"/>
+      <!-- White face panel -->
+      <polygon points="42,85 55,38 85,32 98,65 88,85" fill="#FFFFFF"/>
+      <!-- Ear -->
+      <polygon points="20,95 40,30 28,15 10,45" fill="#002D6B"/>
+      <!-- Eye -->
+      <circle cx="72" cy="52" r="6" fill="#003F8A"/>
+      <!-- Magnifying glass circle -->
+      <circle cx="66" cy="58" r="11" stroke="#003F8A" stroke-width="4" fill="none"/>
+      <!-- Magnifying glass handle -->
+      <line x1="74" y1="67" x2="83" y2="76" stroke="#003F8A" stroke-width="4" stroke-linecap="round"/>
+      <!-- Signal waves -->
+      <path d="M95,38 Q103,30 103,22" stroke="#003F8A" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+      <path d="M100,44 Q112,33 112,18" stroke="#003F8A" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.7"/>
+      <path d="M105,50 Q121,36 121,14" stroke="#003F8A" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.45"/>
+    </svg>
+  </div>
+  <div class="rh-header-text">
+    <h1>RIF<em>Hound</em></h1>
+    <p>Recruiting Intelligence Engine — Surfaces layoffs, WARN notices &amp; M&amp;A signals into a recruiter-ready pipeline report.</p>
+  </div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -652,18 +633,144 @@ if run_btn:
         st.info("Check your API keys are correct and try again.")
 
 else:
-    st.markdown('<div class="sec-head">How It Works</div>', unsafe_allow_html=True)
-    c1, c2, c3, c4 = st.columns(4)
-    for col, icon, title, desc in zip([c1,c2,c3,c4],
-        ["🔴","🟣","🔵","📁"],
-        ["WARN Act Notices","SEC 8-K Filings","M&A News Scanner","Layoffs.FYI CSV"],
-        [
-            "Federal law requires 60-day advance notice before mass layoffs. RIFHound pulls all 50 states daily.",
-            "Item 2.05 = confirmed workforce restructuring filed with the SEC. Most reliable corporate signal.",
-            "Tavily searches for layoff, merger, and restructuring news — catches signals before WARN notices are filed.",
-            "Upload once, saved automatically. You'll get a reminder at 75 days and again at 90 days to refresh it.",
-        ]):
-        with col:
-            st.markdown(f'<div class="stat-card" style="text-align:left;padding:1.4rem"><div style="font-size:1.6rem;margin-bottom:0.6rem">{icon}</div><div style="font-weight:700;color:#ccc;margin-bottom:0.4rem;font-size:0.9rem">{title}</div><div style="color:#555;font-size:0.8rem;line-height:1.5">{desc}</div></div>', unsafe_allow_html=True)
+    st.markdown("""
+    <style>
+    .how-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
+    .how-card {
+        background: #0D1B2A;
+        border: 1px solid #0F2035;
+        border-radius: 10px;
+        padding: 1.4rem 1.6rem;
+    }
+    .how-card-title {
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 1rem;
+        letter-spacing: 2px;
+        color: #1A6EC4;
+        margin-bottom: 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .how-card ul {
+        margin: 0;
+        padding-left: 1.1rem;
+        list-style: none;
+    }
+    .how-card ul li {
+        color: #8899AA;
+        font-size: 0.85rem;
+        line-height: 1.7;
+        padding: 0.1rem 0;
+        position: relative;
+        padding-left: 1rem;
+    }
+    .how-card ul li::before {
+        content: '—';
+        position: absolute;
+        left: 0;
+        color: #003F8A;
+        font-weight: 700;
+    }
+    .how-card ul li strong { color: #C8D8E8; }
+    .setup-box {
+        background: #0D1B2A;
+        border: 1px solid #0F2035;
+        border-left: 3px solid #003F8A;
+        border-radius: 10px;
+        padding: 1.4rem 1.8rem;
+        margin-top: 0.5rem;
+    }
+    .setup-box-title {
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 1rem;
+        letter-spacing: 2px;
+        color: #1A6EC4;
+        margin-bottom: 1rem;
+    }
+    .setup-steps {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1rem;
+    }
+    .setup-step {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+    }
+    .step-num {
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 1.8rem;
+        color: #003F8A;
+        line-height: 1;
+        opacity: 0.6;
+    }
+    .step-label {
+        font-size: 0.78rem;
+        font-weight: 700;
+        color: #C8D8E8;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+    }
+    .step-desc {
+        font-size: 0.8rem;
+        color: #8899AA;
+        line-height: 1.5;
+    }
+    .step-desc a { color: #1A6EC4; text-decoration: none; }
+    </style>
 
-    st.markdown('<div class="tip-box" style="margin-top:1.5rem;text-align:center"><strong>Ready to start?</strong> Add your API keys in the sidebar — saved automatically. Both WARNFirehose and Tavily offer <strong>free tiers</strong>.</div>', unsafe_allow_html=True)
+    <div class="sec-head" style="font-family:'Bebas Neue',sans-serif;font-size:0.95rem;letter-spacing:3px;color:#555;border-bottom:1px solid #0F2035;padding-bottom:0.4rem;margin:0 0 1.2rem">
+        How It Works
+    </div>
+
+    <div class="how-grid">
+
+      <div class="how-card">
+        <div class="how-card-title">📡 Data Sources</div>
+        <ul>
+          <li><strong>WARN Act Notices</strong> — Federal law requires 60-day advance notice before mass layoffs. RIFHound pulls all 50 states daily via WARNFirehose API.</li>
+          <li><strong>SEC 8-K Item 2.05 Filings</strong> — Confirmed restructuring charges filed with the SEC. The strongest corporate signal of an impending layoff.</li>
+          <li><strong>M&amp;A News Scanner</strong> — Tavily searches in real time for layoff, merger, and restructuring announcements — often surfaces signals before WARN notices are even filed.</li>
+          <li><strong>Layoffs.FYI CSV</strong> — Upload the free 90-day export once. RIFHound saves it automatically and reminds you when it needs refreshing.</li>
+        </ul>
+      </div>
+
+      <div class="how-card">
+        <div class="how-card-title">📋 What You Get</div>
+        <ul>
+          <li><strong>Talent Availability Report</strong> — Every company with an active layoff signal, sorted by date with source, location, headcount, and pitch angle.</li>
+          <li><strong>Target Group Mapping</strong> — RIFHound auto-classifies affected roles (Software Engineering, Sales, Field Ops, etc.) so you know who to recruit.</li>
+          <li><strong>LinkedIn Boolean String</strong> — Ready-to-paste Current Company search string. Drop it directly into LinkedIn Recruiter and start sourcing.</li>
+          <li><strong>CSV Export</strong> — Full report and filtered view, both downloadable for pipeline tracking or sharing with your team.</li>
+        </ul>
+      </div>
+
+    </div>
+
+    <div class="setup-box">
+      <div class="setup-box-title">Quick Start Guide</div>
+      <div class="setup-steps">
+        <div class="setup-step">
+          <div class="step-num">01</div>
+          <div class="step-label">Get API Keys</div>
+          <div class="step-desc">Sign up free at <a href="https://warnfirehose.com/account" target="_blank">warnfirehose.com</a> and <a href="https://app.tavily.com" target="_blank">app.tavily.com</a>. No credit card required.</div>
+        </div>
+        <div class="setup-step">
+          <div class="step-num">02</div>
+          <div class="step-label">Enter Keys</div>
+          <div class="step-desc">Paste both keys into the sidebar. They save automatically — you only do this once.</div>
+        </div>
+        <div class="setup-step">
+          <div class="step-num">03</div>
+          <div class="step-label">Upload CSV (Optional)</div>
+          <div class="step-desc">Download the free 90-day CSV from <a href="https://layoffs.fyi" target="_blank">layoffs.fyi</a> and upload it for additional coverage.</div>
+        </div>
+        <div class="setup-step">
+          <div class="step-num">04</div>
+          <div class="step-label">Run &amp; Export</div>
+          <div class="step-desc">Hit Run RIFHound. Filter results by role group, download your report, and paste the Boolean string into LinkedIn Recruiter.</div>
+        </div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
