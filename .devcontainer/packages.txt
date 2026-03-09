@@ -1,0 +1,6 @@
+libgbm1
+libnss3
+libasound2t64
+libxss1
+libxtst6
+libdbus-glib-1-2
