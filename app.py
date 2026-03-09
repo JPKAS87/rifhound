@@ -17,14 +17,21 @@ from rifhound_core import run_pipeline
 # ─────────────────────────────────────────
 @st.cache_resource
 def install_playwright():
+    """
+    Installs Playwright's Chromium binary with all system deps.
+    Uses --with-deps to handle missing system libraries on Streamlit Cloud.
+    Cached so it only runs once per cold start.
+    """
     try:
+        # Install chromium + all required system dependencies
         result = subprocess.run(
-            ["playwright", "install", "chromium"],
-            capture_output=True, text=True, timeout=120
+            ["playwright", "install", "chromium", "--with-deps"],
+            capture_output=True, text=True, timeout=180,
+            env={**os.environ, "PLAYWRIGHT_BROWSERS_PATH": "/home/adminuser/.cache/ms-playwright"}
         )
-        return f"Playwright install: {result.returncode}"
+        return result.returncode
     except Exception as e:
-        return f"Playwright install skipped: {e}"
+        return str(e)
 
 _pw_status = install_playwright()
 
@@ -563,10 +570,23 @@ def scrape_peerlist() -> pd.DataFrame:
         st.error("Playwright is not installed. Add 'playwright' to requirements.txt and run 'playwright install chromium'.")
         return pd.DataFrame()
 
+    # Set browser path explicitly for Streamlit Cloud
+    os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/home/adminuser/.cache/ms-playwright"
+
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
-            args=["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
+            args=[
+                "--no-sandbox",
+                "--disable-gpu",
+                "--disable-dev-shm-usage",
+                "--disable-setuid-sandbox",
+                "--single-process",
+                "--no-zygote",
+                "--disable-extensions",
+                "--disable-background-networking",
+                "--disable-default-apps",
+            ],
         )
         page = browser.new_page(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
