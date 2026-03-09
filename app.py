@@ -5,8 +5,28 @@
 import streamlit as st
 import pandas as pd
 import json
+import os
+import subprocess
 from datetime import datetime, timezone, timedelta
 from rifhound_core import run_pipeline
+
+# ─────────────────────────────────────────
+# PLAYWRIGHT INSTALL (runs once on cold start)
+# Streamlit Cloud doesn't persist installed browsers
+# between deploys, so we install on startup.
+# ─────────────────────────────────────────
+@st.cache_resource
+def install_playwright():
+    try:
+        result = subprocess.run(
+            ["playwright", "install", "chromium"],
+            capture_output=True, text=True, timeout=120
+        )
+        return f"Playwright install: {result.returncode}"
+    except Exception as e:
+        return f"Playwright install skipped: {e}"
+
+_pw_status = install_playwright()
 
 # ─────────────────────────────────────────
 # PAGE CONFIG
@@ -519,6 +539,205 @@ with st.sidebar:
     )
 
 # ─────────────────────────────────────────
+# PEERLIST SCRAPER
+# ─────────────────────────────────────────
+
+def scrape_peerlist() -> pd.DataFrame:
+    """
+    Scrapes peerlist.io/layoffs-tracker using Playwright in headless mode.
+    Scrolls the virtualized table, stops at entries older than 90 days.
+    Returns a deduplicated DataFrame with columns:
+        Company, Layoffs, Date, Industry, Location
+    Cloud-compatible: uses --no-sandbox and --disable-gpu flags.
+    """
+    from datetime import date, timedelta
+    import re
+
+    cutoff = date.today() - timedelta(days=90)
+    rows = []
+    seen = set()
+
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        st.error("Playwright is not installed. Add 'playwright' to requirements.txt and run 'playwright install chromium'.")
+        return pd.DataFrame()
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
+        )
+        page = browser.new_page(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        )
+
+        try:
+            page.goto("https://peerlist.io/layoffs-tracker", wait_until="networkidle", timeout=30000)
+            page.wait_for_timeout(2000)
+
+            stop_scraping = False
+            last_row_count = 0
+            stall_count = 0
+
+            while not stop_scraping:
+                # Find all table rows — Peerlist uses tr elements inside a table/tbody
+                row_elements = page.query_selector_all("table tbody tr, [role='row']:not([role='columnheader'])")
+
+                for row_el in row_elements:
+                    try:
+                        cells = row_el.query_selector_all("td, [role='cell']")
+                        if len(cells) < 3:
+                            continue
+
+                        # Extract text from cells — Peerlist columns: Company | Layoffs | Date | Industry | Location
+                        cell_texts = [c.inner_text().strip() for c in cells]
+
+                        company  = cell_texts[0] if len(cell_texts) > 0 else ""
+                        layoffs  = cell_texts[1] if len(cell_texts) > 1 else ""
+                        date_str = cell_texts[2] if len(cell_texts) > 2 else ""
+                        industry = cell_texts[3] if len(cell_texts) > 3 else ""
+                        location = cell_texts[4] if len(cell_texts) > 4 else ""
+
+                        # Clean company name
+                        company = company.split("\n")[0].strip()
+                        if not company or len(company) < 2:
+                            continue
+
+                        # Deduplicate
+                        company_key = company.lower().strip()
+                        if company_key in seen:
+                            continue
+
+                        # Parse date — Peerlist uses formats like "Mar 5, 2026" or "2026-03-05"
+                        event_date = None
+                        for fmt in ["%b %d, %Y", "%B %d, %Y", "%Y-%m-%d", "%d %b %Y", "%m/%d/%Y"]:
+                            try:
+                                event_date = datetime.strptime(date_str.strip(), fmt).date()
+                                break
+                            except (ValueError, AttributeError):
+                                continue
+
+                        if event_date is None:
+                            # Try extracting just a year+month if full date fails
+                            match = re.search(r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+20\d{2}", date_str, re.IGNORECASE)
+                            if match:
+                                try:
+                                    event_date = datetime.strptime(match.group(0).replace(",", ""), "%b %d %Y").date()
+                                except ValueError:
+                                    pass
+
+                        if event_date is None:
+                            continue
+
+                        # Stop condition — date older than 90 days
+                        if event_date < cutoff:
+                            stop_scraping = True
+                            break
+
+                        seen.add(company_key)
+                        rows.append({
+                            "Date":     event_date.strftime("%Y-%m-%d"),
+                            "Company":  company,
+                            "Layoffs":  layoffs,
+                            "Industry": industry,
+                            "Location": location,
+                        })
+
+                    except Exception:
+                        continue
+
+                if stop_scraping:
+                    break
+
+                # Scroll down to load more rows
+                page.evaluate("window.scrollBy(0, 800)")
+                page.wait_for_timeout(800)
+
+                # Stall detection — stop if no new rows after 5 scrolls
+                current_count = len(seen)
+                if current_count == last_row_count:
+                    stall_count += 1
+                    if stall_count >= 5:
+                        break
+                else:
+                    stall_count = 0
+                last_row_count = current_count
+
+        except Exception as e:
+            st.warning(f"Scraper encountered an issue: {str(e)}")
+        finally:
+            browser.close()
+
+    if not rows:
+        return pd.DataFrame(columns=["Date", "Company", "Layoffs", "Industry", "Location"])
+
+    df = pd.DataFrame(rows)
+    df = df.sort_values("Date", ascending=False).reset_index(drop=True)
+    return df
+
+
+# Peerlist scraper UI
+st.markdown('<div class="sec-head">Peerlist Layoffs Scraper</div>', unsafe_allow_html=True)
+
+with st.expander("ℹ️ About this scraper", expanded=False):
+    st.markdown("""
+    <div class="tip-box">
+    Scrapes <strong>peerlist.io/layoffs-tracker</strong> in real time using a headless browser.<br>
+    Returns all layoff events from the <strong>last 90 days</strong>, deduplicated by company.<br>
+    Results are separate from the main RIFHound pipeline and can be downloaded independently.
+    </div>
+    """, unsafe_allow_html=True)
+
+pl_col_l, pl_col_m, pl_col_r = st.columns([1, 2, 1])
+with pl_col_m:
+    scrape_btn = st.button("🕷️  Scrape Peerlist", key="scrape_peerlist")
+
+if scrape_btn:
+    with st.spinner("Launching headless browser and scraping peerlist.io..."):
+        pl_df = scrape_peerlist()
+
+    if pl_df.empty:
+        st.info("No results returned. The page structure may have changed or the scraper timed out.")
+    else:
+        st.success(f"✅ Found **{len(pl_df)} companies** with layoffs in the last 90 days from Peerlist.")
+
+        st.markdown('<div class="sec-head">Peerlist Results</div>', unsafe_allow_html=True)
+
+        # Filters
+        pl_f1, pl_f2 = st.columns(2)
+        with pl_f1:
+            if "Industry" in pl_df.columns and pl_df["Industry"].nunique() > 1:
+                ind_filter = st.multiselect("Filter by Industry",
+                    options=sorted(pl_df["Industry"].dropna().unique()), placeholder="All industries",
+                    key="pl_industry")
+            else:
+                ind_filter = []
+        with pl_f2:
+            if "Location" in pl_df.columns and pl_df["Location"].nunique() > 1:
+                loc_filter = st.multiselect("Filter by Location",
+                    options=sorted(pl_df["Location"].dropna().unique()), placeholder="All locations",
+                    key="pl_location")
+            else:
+                loc_filter = []
+
+        pl_filtered = pl_df.copy()
+        if ind_filter: pl_filtered = pl_filtered[pl_filtered["Industry"].isin(ind_filter)]
+        if loc_filter: pl_filtered = pl_filtered[pl_filtered["Location"].isin(loc_filter)]
+
+        st.dataframe(pl_filtered, use_container_width=True, hide_index=True, height=380)
+        st.caption(f"Showing {len(pl_filtered)} of {len(pl_df)} companies — last 90 days")
+
+        st.download_button(
+            "📥 Download Peerlist Results (CSV)",
+            data=pl_filtered.to_csv(index=False).encode("utf-8"),
+            file_name=f"peerlist_layoffs_{datetime.today().strftime('%Y%m%d')}.csv",
+            mime="text/csv",
+        )
+
+st.markdown("---")
+
+# ─────────────────────────────────────────
 # RUN BUTTON
 # ─────────────────────────────────────────
 has_any_source = (
@@ -588,7 +807,7 @@ if run_btn:
             st.markdown('<div class="sec-head">Talent Availability Report</div>', unsafe_allow_html=True)
             rows = [{"Date": r.date.strftime("%Y-%m-%d"), "Company": r.company,
                      "Location": r.location or "—", "Target Group": r.target_group or "Review",
-                     "Headcount": r.headcount or "—", "Pitch Angle": r.pitch_angle,
+                     "Headcount": r.headcount or "—",
                      "Source": r.source, "Reason": r.reason} for r in records]
             df = pd.DataFrame(rows)
 
@@ -739,7 +958,7 @@ else:
       <div class="how-card">
         <div class="how-card-title">📋 What You Get</div>
         <ul>
-          <li><strong>Talent Availability Report</strong> — Every company with an active layoff signal, sorted by date with source, location, headcount, and pitch angle.</li>
+          <li><strong>Talent Availability Report</strong> — Every company with an active layoff signal, sorted by date with source, location, and headcount.</li>
           <li><strong>Target Group Mapping</strong> — RIFHound auto-classifies affected roles (Software Engineering, Sales, Field Ops, etc.) so you know who to recruit.</li>
           <li><strong>LinkedIn Boolean String</strong> — Ready-to-paste Current Company search string. Drop it directly into LinkedIn Recruiter and start sourcing.</li>
           <li><strong>CSV Export</strong> — Full report and filtered view, both downloadable for pipeline tracking or sharing with your team.</li>
